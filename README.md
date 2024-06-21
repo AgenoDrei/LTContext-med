@@ -41,7 +41,7 @@ or
 [link 2](https://zenodo.org/record/3625992#.Xiv9jGhKhPY).
 
 ### Assembly101
-Follow the instructions at [Assembly101-Download-Scripts](https://github.com/assembly-101/assembly101-download-scripts) to download the `.lmdb` TSM features.
+Follow the instructions at [Assembly101-Download-Scripts](https://github.com/assembly-101/assembly101-download-scripts) to download the TSM features.
 The annotations for action segmentation can be downloaded from [assembly101-annotations](https://drive.google.com/drive/folders/1QoT-hIiKUrSHMxYBKHvWpW9Z9aCznJB7). 
 After downloading the annotation put `coarse-annotations` inside `data/assembly101` folder.
 We noticed loading from `numpy` can be faster, you can convert the `.lmdb` features to `numpy` and use `LTContext_Numpy.yaml` config. 

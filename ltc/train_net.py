@@ -53,7 +53,7 @@ def train_epoch(
     train_bar = tqdm(enumerate(train_loader), total=len(train_loader))
     for cur_iter, (batch_dict) in train_bar:
         misc.move_to_device(batch_dict, device)
-        logits = model(batch_dict['features'], batch_dict['masks'])
+        logits, attn_mats = model(batch_dict['features'], batch_dict['masks'])
         
         loss_dict = loss_func(logits, batch_dict['targets'])
         optimizer.zero_grad()
@@ -106,7 +106,7 @@ def eval_epoch(
 
     for cur_iter, (batch_dict) in tqdm(enumerate(val_loader), total=len(val_loader)):
         misc.move_to_device(batch_dict, device)
-        logits = model(batch_dict['features'], batch_dict['masks'])
+        logits, attn_mats = model(batch_dict['features'], batch_dict['masks'])
         loss_dict = loss_func(logits, batch_dict['targets'])
 
         prediction = misc.prepare_prediction(logits)

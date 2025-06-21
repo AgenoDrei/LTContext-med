@@ -185,13 +185,15 @@ class MultiHeadAttention(nn.Module):
             return_attn_matrix=True,
             position_bias=position_bias
         )
+        
 
         z = self._combine_heads(z, bs)
         if self.use_conv1d_proj:
             z = rearrange(z, 'b l d -> b d l')
 
+        print(f"Attention matrix shape: {attn_matrix.shape}, z shape (after comb): {z.shape}")
         output = self.dropout(self.proj(z))
-        return output
+        return output, att_mask
 
 
 def build_attention(attention_params):

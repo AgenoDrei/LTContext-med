@@ -94,7 +94,7 @@ class WindowedAttention(BaseAttention):
         """
         batch_size, _, seq_len = qk.shape
         q, k, v, att_mask = self._prep_qkv(qk=qk, v=v, masks=masks)
-        windowed_attn = self.attn(query=q, key=k, value=v, att_mask=att_mask)
+        windowed_attn, _ = self.attn(query=q, key=k, value=v, att_mask=att_mask)
         out = self._undo_reshape(windowed_attn, batch_size, seq_len)
         if exists(masks):
             out = out * masks
@@ -159,11 +159,11 @@ class LTContextAttention(BaseAttention):
         """
         batch_size, _, seq_len = qk.shape
         q, k, v, att_mask = self._prep_qkv(qk=qk, v=v, masks=masks)
-        lt_attn = self.attn(query=q, key=k, value=v, att_mask=att_mask)
+        lt_attn, attn_mat = self.attn(query=q, key=k, value=v, att_mask=att_mask)
         out = self._undo_reshape(lt_attn, batch_size, seq_len)
         if exists(masks):
             out = out * masks
-        return out
+        return out, attn_mat
 
 
 class DilatedConv(nn.Module):
@@ -216,7 +216,7 @@ class LTCBlock(nn.Module):
         self.out_linear = nn.Conv1d(model_dim, model_dim, kernel_size=1, bias=True)
         self.dropout = nn.Dropout(dropout_prob)
 
-    def forward(self, inputs: Tensor, masks: Tensor, prev_stage_feat: Tensor = None):
+    def forward(self, inputs: Tensor, masks: Tensor, prev_stage_feat: Tensor = None, return_attn_mat: bool = False):
         """
 
         :param inputs:
@@ -225,12 +225,17 @@ class LTCBlock(nn.Module):
         :return:
         """
         out = self.dilated_conv(inputs, masks)
+        print(f"inputs shape: {inputs.shape}, out shape: {out.shape}")
         out = self.windowed_attn(self.instance_norm(out), prev_stage_feat, masks) + out
-        out = self.ltc_attn(self.instance_norm(out), prev_stage_feat, masks) + out
+        out_ltc, attn_mat = self.ltc_attn(self.instance_norm(out), prev_stage_feat, masks)
+        out = out + out_ltc
         out = self.out_linear(out)
         out = self.dropout(out)
         out = out + inputs
-        return out * masks
+        if return_attn_mat:
+            return out * masks, attn_mat
+        else:
+            return out * masks
 
 
 class LTCModule(nn.Module):
@@ -245,7 +250,8 @@ class LTCModule(nn.Module):
                  long_term_attn_g: int,
                  use_instance_norm: bool,
                  dropout_prob: float,
-                 channel_dropout_prob: float):
+                 channel_dropout_prob: float,
+                 is_first_stage: bool = False):
         super(LTCModule, self).__init__()
         self.channel_dropout = nn.Dropout1d(channel_dropout_prob)
         self.input_proj = nn.Conv1d(input_dim, model_dim, kernel_size=1, bias=True)
@@ -263,14 +269,26 @@ class LTCModule(nn.Module):
                     )
             )
         self.out_proj = nn.Conv1d(model_dim, num_classes, kernel_size=1, bias=True)
+        self.is_first_stage = is_first_stage
+        self.attn_mats_per_video = [] # To store attention matrices if needed
 
     def forward(self, inputs: Tensor, masks: Tensor, prev_stage_feat: Tensor = None):
+        attn_mats = []
         inputs = self.channel_dropout(inputs)
         feature = self.input_proj(inputs)
+        print(f"inputs shape: {inputs.shape}, feature shape: {feature.shape},")
         for layer in self.layers:
-            feature = layer(feature, masks, prev_stage_feat)
+            if self.is_first_stage:
+                feature, attn_mat = layer(feature, masks, prev_stage_feat, return_attn_mat=True)
+                attn_mats.append(attn_mat)
+            else: 
+                feature = layer(feature, masks, prev_stage_feat)
         out = self.out_proj(feature) * masks
-        return out, feature
+        self.attn_mats_per_video.append(attn_mats)
+        
+        if self.is_first_stage:
+            return (out, feature, attn_mats)
+        return (out, feature)
 
 
 class LTC(nn.Module):
@@ -293,7 +311,8 @@ class LTC(nn.Module):
                                 long_term_attn_g=ltc_cfg.LONG_TERM_ATTN_G,
                                 use_instance_norm=ltc_cfg.USE_INSTANCE_NORM,
                                 dropout_prob=ltc_cfg.DROPOUT_PROB,
-                                channel_dropout_prob=ltc_cfg.CHANNEL_MASKING_PROB
+                                channel_dropout_prob=ltc_cfg.CHANNEL_MASKING_PROB,
+                                is_first_stage=True
                                 )
 
         reduced_dim = int(ltc_cfg.MODEL_DIM // ltc_cfg.DIM_REDUCTION)
@@ -325,14 +344,11 @@ class LTC(nn.Module):
         :param masks: Tensor with shape [batch_size, sequence_length, 1]
         :return: outputs: Tensor with shape [batch_size, num_classes, sequence_length]
         """
-        out, feature = self.stage1(inputs, masks)
+        out, feature, attn_mats = self.stage1(inputs, masks)
         output_list = [out]
         feature = self.dim_reduction(feature)
-        for stage in self.stages:
-            out, feature = stage(F.softmax(out, dim=1) * masks,
-                                 prev_stage_feat=feature * masks,
-                                 masks=masks,
-                                 )
+        for i, stage in enumerate(self.stages):
+            out, feature = stage(F.softmax(out, dim=1) * masks, prev_stage_feat=feature * masks, masks=masks)
             output_list.append(out)
         logits = torch.stack(output_list, dim=0)
-        return logits
+        return logits, attn_mats

@@ -66,6 +66,9 @@ _C.TEST.BATCH_SIZE = 1
 # saving the prediction
 _C.TEST.SAVE_PREDICTIONS = False
 
+# whether to save attention matrices
+_C.TEST.SAVE_ATTN_MATS = False
+
 _C.TEST.SAVE_RESULT_PATH = "./experiments/results"
 
 # -----------------------------------------------------------------------------

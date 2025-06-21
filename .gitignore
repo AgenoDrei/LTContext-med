@@ -133,3 +133,5 @@ dmypy.json
 
 # Queueing Tool logs
 /q.log/
+.vscode/
+logging/

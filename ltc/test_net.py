@@ -62,7 +62,10 @@ def eval_model(
         assert mb_size == 1, "Validation batch size should be one."
 
         misc.move_to_device(batch_dict, device)
-        logits = model(batch_dict['features'], batch_dict['masks'])
+        print(f"Processing video: {batch_dict['video_name']}, features shape: {batch_dict['features'].shape}")
+        logits, attn_mats = model(batch_dict['features'], batch_dict['masks'])
+        
+        print(len(attn_mats), attn_mats[0][0].shape)
 
         prediction = misc.prepare_prediction(logits)
 
@@ -85,12 +88,19 @@ def eval_model(
             os.makedirs(base_path, exist_ok=True)
             np.save(join(base_path, "pred.npy"), prediction[0].long().numpy())
             np.save(join(base_path, "gt.npy"), target[0].long().numpy())
+            
+        if cfg.TEST.SAVE_ATTN_MATS:
+            logger.info(f"Saving attention matrices...")
+            os.makedirs(join(cfg.OUTPUT_DIR, "attn_mats"), exist_ok=True)
+            for i, attn_mat in enumerate(attn_mats):
+                attn_mat = attn_mat.cpu().numpy()
+                np.save(join(cfg.OUTPUT_DIR, "attn_mats", f"{video_name}_attn_{i}.npy"), attn_mat)
 
     test_res_df = pd.DataFrame(test_metrics)
     test_res_df.round(5).to_csv(join(save_path, "testing_metrics.csv"))
     mean_metrics = test_res_df[['F1@10', 'F1@25', 'F1@50', 'Edit', 'MoF']].mean()
     logger.info("Testing metric:")
-    logging.log_json_stats(mean_metrics, precision=1)
+    logging.log_json_stats(mean_metrics, precision=2)
 
 
 def test(cfg: CfgNode):

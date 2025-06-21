@@ -30,6 +30,7 @@ class VideoDataset(Dataset):
         self._video_sampling_rate = cfg.DATA.FRAME_SAMPLING_RATE
         self._construct_loader()
         self._dataset_size = len(self._path_to_features)
+        print(self._dataset_size, self._video_sampling_rate)
 
     def _construct_loader(self):
         """
@@ -79,7 +80,7 @@ class VideoDataset(Dataset):
         """
         sample = {}
         targets = self._segmentations[index]
-        sample['targets'] = torch.tensor(targets).long()[::self._video_sampling_rate]  # [T]
+        sample['targets'] = torch.from_numpy(targets).long()[::self._video_sampling_rate]  # [T]
 
         feature_path = self._path_to_features[index]
         sample['features'] = torch.tensor(self._load_features(feature_path))  # [D, T]

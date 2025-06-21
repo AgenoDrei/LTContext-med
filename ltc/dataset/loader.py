@@ -6,12 +6,14 @@ import torch
 from torch.utils.data.sampler import RandomSampler
 from .breakfast import Breakfast
 from .assembly101 import Assembly101
+from .sics105_c20 import sics105_c20
 from .utils import sequence_collate
 
 
 _DATASETS = {
     "breakfast": Breakfast,
     "assembly101": Assembly101,
+    "sics105_c20": sics105_c20
 }
 
 

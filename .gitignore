@@ -8,6 +8,7 @@ logs.txt
 experiments/
 debug/
 data/assembly101/coarse-annotations/
+data/sics105_c20/
 # Byte-compiled / optimized / DLL files
 #
 __pycache__/

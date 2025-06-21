@@ -54,7 +54,7 @@ def train_epoch(
     for cur_iter, (batch_dict) in train_bar:
         misc.move_to_device(batch_dict, device)
         logits = model(batch_dict['features'], batch_dict['masks'])
-
+        
         loss_dict = loss_func(logits, batch_dict['targets'])
         optimizer.zero_grad()
         loss_dict['loss'].backward()
